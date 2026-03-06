@@ -1,10 +1,10 @@
 ### Intro
-This repo serves as a proof of concept for integrating importance sampling into the COLT (Cosmic Lyman-alpha Transfer) solver:
+This repo serves as a proof of concept, or more accurately, a minimal reproducible example, of integrating importance sampling into the COLT (Cosmic Lyman-alpha Transfer) solver:
 - [Source code](https://bitbucket.org/aaron_smith/colt/src/master/)
 - [Smith et al. (2015)](https://ui.adsabs.harvard.edu/abs/2015MNRAS.449.4336S/abstract)
 - [Documentation](https://colt.readthedocs.io/en/latest/)
 
-Why in a sandbox rather than a PR? Primarily to learn, but also to reduce regression risk by
+Why implement in this sandbox rather than opening a PR? Primarily for the learning process, but also to reduce regression risk by
 1. Verifying mathematical foundations under simple constraints
 2. Validating against architectural and performance requirements for the solver (pre-MPI and HDF5, etc)
 
@@ -40,8 +40,10 @@ $$
 \sum_{i=1}^N(\frac{1}{N}e^{-\tau})=e^{-\tau}
 $$
 
-#### v2 - off-center point source
-Reference: `face_distance` function of `spherical.cc`. Return $e^{-\kappa d}$.
+#### v2 - off-center point source, multiple sources
+Vary the location of the point source. $R$ is no longer $1$. Take $s$ as nearest  Consider `face_distance` function of `spherical.cc`. Return $e^{-\kappa s}$.
+
+
 
 #### v3 - multiple point sources
 Create `Source` struct with position and luminosity fields. Create vector of `Source`s. Compute total escape fraction:
@@ -50,8 +52,23 @@ $$
 f_\text{esc,tot}=\dfrac{\sum L_i f_\text{esc,i}}{\sum L_i}
 $$
 
-#### v4 - importance sampling
-Compute total luminosity. Create a CDF array...
+#### v4 - source importance sampling
+Compute total luminosity of all sources $L_\text{tot}$. Initialize CDF array $C$, where the $i$-element of the array is
+
+$$
+C[i]=C[i-1] + \dfrac{L_i}{L_\text{tot}}
+$$
+
+where $C[0]=\frac{L_1}{L_\text{tot}}$.
+
+Sourcing: for each proton, draw a random number $\xi=[0,1)$. The proton's source is determined by C[\lfloor\xi\rfloor].
+Weighting for conservation of energy: initial weight $W_i$ of each photon is inversely proportional to the probability of its source being sampled from:
+
+$$
+W_i\propto L_\text{tot}/N
+$$
 
 #### v5 - radial shells
-Reference: `random_point_in_cell` function from `spherical.cc`.
+Reference: `random_point_in_cell` function from `spherical.cc` for uniform volumetric sampling.
+
+#### v6 - scattering albedo, random walk
