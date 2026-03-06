@@ -20,7 +20,7 @@ Graph:
 Start `Photon.weight` with $1/N$. On each step, multiply by $e^-\tau$ (there is only one step currently). Sum final weights, trivially:
 
 $$
-\sum_{i=1}^N(1/Ne^{-\tau})=e^{-\tau}
+\sum_{i=1}^N(\frac{1}{N}e^{-\tau})=e^{-\tau}
 $$
 
 #### v2 - off-center point source
