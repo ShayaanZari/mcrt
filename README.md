@@ -27,7 +27,7 @@ Assumptions:
 Compute distance to interaction: 
 $$\triangle l=-\frac{\ln\xi}{\kappa}$$.
 Move the packet: $\vec r=\vec r_0+\hat n\triangle l$.
-If $|\vec r\geq R$, where $R$ is radius of the sphere, photon escapes and count is incremented.
+If $|\vec r|\geq R$, where $R$ is radius of the sphere, photon escapes and count is incremented.
 Otherwise, photon is absorbed (do nothing).
 
 Graph:
@@ -41,14 +41,18 @@ $$
 $$
 
 #### v2 - off-center point source, multiple sources
-Vary the location of the point source. $R$ is no longer $1$. Take $s$ as nearest  Consider `face_distance` function of `spherical.cc`. Return $e^{-\kappa s}$.
+Vary the location of the point source, so distance $s$ from source position to edge of sphere is not equal to $R$. Calculate $s$ using `face_distance` function of `spherical.cc`. Compute $e^{-\kappa s}$ instead of $e^{-kappa}$. 
+
+Escape fraction: Let $r$ be the distance of the source from the origin. $f_\text{esc}$ should be higher at $r=R/2$ than $r=0$. For $r=R$ (i.e. source at edge of sphere), $f_\text{esc}$ should approach $0.5$ as $\tau\to\infty$, as exactly half protons should have a direction pointing outwards.
 
 #### v3 - multiple point sources
-Create `Source` struct with position and luminosity fields. Create vector of `Source`s. Compute total escape fraction:
+Create `Source` struct with position and luminosity fields. Luminosity is a simple weight. Create vector of `Source`s. Run $N$ packets for each `Source`. Compute total escape fraction:
 
 $$
 f_\text{esc,tot}=\dfrac{\sum L_i f_\text{esc,i}}{\sum L_i}
 $$
+
+Escape fraction should be skewed towards the escape fraction of sources with higher luminosity.
 
 #### v4 - source importance sampling
 Compute total luminosity of all sources $L_\text{tot}$. Initialize CDF array $C$, where the $i$-element of the array is
@@ -59,8 +63,8 @@ $$
 
 where $C[0]=\frac{L_1}{L_\text{tot}}$.
 
-Make two changes to the code:
-- Sourcing: for each proton, draw a random number $\xi=[0,1)$. The proton's source is determined by C[\lfloor\xi\rfloor].
+Make two changes to code:
+- Sourcing: for each proton, draw a random number $\xi=[0,1)$. Find first index $j$ where $\xi<C[j]$. The proton's source is determined by the source which corresponds to $C[j]$.
 - Weighting for conservation of energy: initial weight $W_i$ of each photon is inversely proportional to the probability of its source being sampled from:
 
 $$
@@ -68,6 +72,23 @@ W_i\propto L_\text{tot}/N
 $$
 
 #### v5 - radial shells
-Reference: `random_point_in_cell` function from `spherical.cc` for uniform volumetric sampling.
+Reference: `random_point_in_cell` function from `spherical.cc` for uniform volumetric sampling. $\vec r =R\cdot \sqrt[3]{\xi}$ for random number $\xi\in[0,1)$.
 
-#### v6 - scattering albedo, random walk
+Compute noise of each shell: 
+
+$$
+\dfrac{\sum f_\text{esc}^2}{(\sum f_\text{esc})^2}
+$$
+
+
+#### v6 - scattering
+Scattering albedo:
+
+$$
+\omega=\dfrac{\kappa_\text{scat}}{\kappa}
+$$
+
+Random walk: For each photon, after initial movement step, if it has not escaped, draw $\xi\in[0,1)$. If $\xi\leq\omega$, it scatters: draw a new $\va n$, take a step in the corresponding direction, and repeat until absorption $\xi>\omega$ or escape $\va r\geq R$. 
+Add a limit on number of scatters.
+
+At $\omega=1.0$, $f_\text{esc}$ should asymptote to $1.0$.
