@@ -15,7 +15,7 @@ Design principles:
 
 ### Version log and plan of implementation
 
-#### v0 - event-based pure absorption (done, `archive/sim-v1.cc`)
+#### v0 - event-based pure absorption (done, `archive/sim-v0.cc`)
 Assumptions:
 1. Optical depth is homogeneous $\tau=\int_0^R\kappa ds=\kappa R=\kappa$
 2. Scattering albedo $\omega=0$
