@@ -64,7 +64,7 @@ $$
 where $C[0]=\frac{L_1}{L_\text{tot}}$.
 
 For each proton, draw a random number $\xi=[0,1)$. Find first index $j$ where $\xi<C[j]$. The proton's source is determined by the source which corresponds to $C[j]$.
-Initial weight remains $1/N$. If $L_1=100$ and $L_2=1$, then we spawn 100 more protons at $S_1$ than $S_2$.
+Initial weight remains unchanged at $1/N$. If $L_1=100$ and $L_2=1$, then we spawn 100 more protons at $S_1$ than $S_2$.
 
 #### v5 - radial shells
 Compute volume of each shell. Uniform volumetric sampling method: `random_point_in_cell` function from `spherical.cc`. $\vec r =R\cdot \sqrt[3]{\xi}$ for random number $\xi\in[0,1)$. 
@@ -78,13 +78,13 @@ $$
 $$
 
 #### v6 - importance sampling (biased PDF)
-Combine the noise metric from v5 to actively adjust the CDF table in v4 so that sources with higher variance are sampled from more frequently. If $L_1=100$ with $f_\text{esc,1}=0.01$ and $L_2=1$ with $f_\text{esc,2}$, then we spawn equal number of protons at both $S_1$ and $S_2$. Multiply initial weight 
-Weighting for conservation of energy: initial weight $W_i$ of each photon is inversely proportional to the probability of its source being sampled from:
+Combine the noise metric from v5 to actively adjust the CDF table in v4 so that sources with higher variance are sampled from more frequently. If $L_1=100$ with $f_\text{esc,1}=0.01$ and $L_2=1$ with $f_\text{esc,2}$, then we spawn equal number of protons at both $S_1$ and $S_2$. 
+
+What should initial weight $W_i$ be to facilitate conservation of energy? Inversely proportional to the probability of the source it was sampled from?  
 
 $$
 W_i\propto L_\text{tot}/N
 $$
-
 
 
 #### v6 - basic scattering
