@@ -22,7 +22,7 @@ Assumptions:
 1. Optical depth is homogeneous $\tau=\int_0^R\kappa ds=\kappa R=\kappa$
 2. Scattering albedo $\omega=0$
 
-`Photon` packet with `position` $\vec r_0$ initialized to origin and `direction` $\hat n$ initialized to random isotropic direction (using the $\phi$ and $\mu$ sampling scheme outlined in section 4.2.1 in the MCRT paper)
+`Photon` packet with `position` $\vec r_0$ initialized to origin and `direction` $\hat n$ initialized to random isotropic direction (using the $\phi$ and $\mu$ sampling scheme outlined in section 4.2.1 of the MCRT paper)
 
 Compute distance to interaction: 
 $$\triangle l=-\frac{\ln\xi}{\kappa}$$.
