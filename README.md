@@ -17,7 +17,7 @@ Graph:
 ![alt2](plots/exponential_curve.png?raw=true "Title")
 
 #### v1 - continuous attenuation (done, `src/sim.cc`)
-Start `Photon.weight` with $1/N$. On each step, multiply by $e^-\tau$ (there is only one step currently). Sum final weights, trivially:
+Start `Photon.weight` with $1/N$. On each step, multiply by $e^{-\tau}$. As there is only one step currently, the sum of the final weights is trivially:
 
 $$
 \sum_{i=1}^N(\frac{1}{N}e^{-\tau})=e^{-\tau}
