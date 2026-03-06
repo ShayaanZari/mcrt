@@ -54,20 +54,20 @@ $$
 
 Escape fraction should be skewed towards the escape fraction of sources with higher luminosity.
 
-#### v4 - source sampling (luminosity PDF)
+#### v4 - basic source sampling (luminosity PDF)
 Compute total luminosity of all sources $L_\text{tot}$. Initialize CDF array $C$, where the $i$-element of the array is
 
 $$
 C[i]=C[i-1] + \dfrac{L_i}{L_\text{tot}}
 $$
 
-where $C[0]=\frac{L_1}{L_\text{tot}}$.
+where $C[0]=\frac{L_0}{L_\text{tot}}$.
 
 For each proton, draw a random number $\xi=[0,1)$. Find first index $j$ where $\xi<C[j]$. The proton's source is determined by the source which corresponds to $C[j]$.
 Initial weight remains unchanged at $1/N$. If $L_1=100$ and $L_2=1$, then we spawn 100 more protons at $S_1$ than $S_2$.
 
 #### v5 - radial shells
-Compute volume of each shell. Uniform volumetric sampling method: `random_point_in_cell` function from `spherical.cc`. $\vec r =R\cdot \sqrt[3]{\xi}$ for random number $\xi\in[0,1)$. 
+Compute volume of each shell. Uniform volumetric sampling method: `random_point_in_cell` function from `spherical.cc`.
 
 Assign luminosity to the source proportional to its radial volume: $L=\int jdV$ where emission density $j$ is uniform. 
 
@@ -80,21 +80,23 @@ $$
 #### v6 - importance sampling (biased PDF)
 Combine the noise metric from v5 to actively adjust the CDF table in v4 so that sources with higher variance are sampled from more frequently. If $L_1=100$ with $f_\text{esc,1}=0.01$ and $L_2=1$ with $f_\text{esc,2}$, then we spawn equal number of protons at both $S_1$ and $S_2$. 
 
-What should initial weight $W_i$ be to facilitate conservation of energy? Inversely proportional to the probability of the source it was sampled from?  
+To conserve energy, the initial weight $W_i$ of a photon is inversely proportional to the probability of the source it was sampled from.
 
 $$
-W_i\propto L_\text{tot}/N
+W_i=\dfrac{L_i}{P_i\cdot N}
 $$
 
+where $P_i$ is the active probability of source $i$.
 
-#### v6 - basic scattering
+
+#### v7 - basic scattering
 Scattering albedo:
 
 $$
 \omega=\dfrac{\kappa_\text{scat}}{\kappa}
 $$
 
-Random walk: For each photon, after initial movement step, if it has not escaped, draw $\xi\in[0,1)$. If $\xi\leq\omega$, it scatters: draw a new $\vec n$, take a step in the corresponding direction, and repeat until absorption $\xi>\omega$ or escape $\vec r\geq R$. 
+Random walk: instead of For each photon, after initial movement step, if it has not escaped, draw $\xi\in[0,1)$. If $\xi\leq\omega$, it scatters: draw a new $\vec n$, take a step in the corresponding direction, and repeat until absorption $\xi>\omega$ or escape $\vec r\geq R$. 
 Add a limit on number of times a photon may scatter before being forcibly terminated.
 
 At $\omega=1.0$, $f_\text{esc}$ should asymptote to $1.0$.
