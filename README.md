@@ -18,6 +18,7 @@ Graph:
 
 #### v1 - continuous attenuation (done, `src/sim.cc`)
 Start `Photon.weight` with $1/N$. On each step, multiply by $e^-\tau$ (there is only one step currently). Sum final weights, trivially:
+
 $$
 \sum_{i=1}^N(1/Ne^{-\tau})=e^{-\tau}
 $$
@@ -27,6 +28,7 @@ Reference: `face_distance` function of `spherical.cc`. Return $e^{-\kappa d}$.
 
 #### v3 - multiple point sources
 Create `Source` struct with position and luminosity fields. Create vector of `Source`s. Compute total escape fraction:
+
 $$
 f_\text{esc,tot}=\dfrac{\sum L_i f_\text{esc,i}}{\sum L_i}
 $$
