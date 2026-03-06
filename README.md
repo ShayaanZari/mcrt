@@ -1,5 +1,5 @@
 ### Intro
-This repo serves as a proof of concept, or more accurately, a minimal reproducible example, of integrating importance sampling into the COLT (Cosmic Lyman-alpha Transfer) solver:
+This repo serves as a proof of concept for, or a minimal reproducible example of integrating importance sampling into the COLT (Cosmic Lyman-alpha Transfer) solver:
 - [Source code](https://bitbucket.org/aaron_smith/colt/src/master/)
 - [Smith et al. (2015)](https://ui.adsabs.harvard.edu/abs/2015MNRAS.449.4336S/abstract)
 - [Documentation](https://colt.readthedocs.io/en/latest/)
@@ -17,12 +17,12 @@ Design principles:
 
 ### Version log and plan of implementation
 
-#### v0 - event-based pure absorption (done, `archive/sim-v0.cc`)
+#### v0 - event-based pure absorption (complete: `archive/sim-v0.cc`)
 Assumptions:
 1. Optical depth is homogeneous $\tau=\int_0^R\kappa ds=\kappa R=\kappa$
 2. Scattering albedo $\omega=0$
 
-`Photon` packet with `position` $\vec r_0$ initialized to origin and `direction` $\hat n$ initialized to random isotropic direction.
+`Photon` packet with `position` $\vec r_0$ initialized to origin and `direction` $\hat n$ initialized to random isotropic direction (using the $\phi$ and $\mu$ sampling scheme outlined in section 4.2.1 in the MCRT paper)
 
 Compute distance to interaction: 
 $$\triangle l=-\frac{\ln\xi}{\kappa}$$.
@@ -33,7 +33,7 @@ Otherwise, photon is absorbed (do nothing).
 Graph:
 ![alt2](plots/exponential_curve.png?raw=true "Title")
 
-#### v1 - continuous attenuation (done, `src/sim.cc`)
+#### v1 - continuous attenuation (complete: `src/sim.cc`)
 Start `Photon.weight` with $1/N$. On each step, multiply by $e^{-\tau}$. As there is only one step currently, the sum of the final weights is trivially:
 
 $$
@@ -42,8 +42,6 @@ $$
 
 #### v2 - off-center point source, multiple sources
 Vary the location of the point source. $R$ is no longer $1$. Take $s$ as nearest  Consider `face_distance` function of `spherical.cc`. Return $e^{-\kappa s}$.
-
-
 
 #### v3 - multiple point sources
 Create `Source` struct with position and luminosity fields. Create vector of `Source`s. Compute total escape fraction:
@@ -61,8 +59,9 @@ $$
 
 where $C[0]=\frac{L_1}{L_\text{tot}}$.
 
-Sourcing: for each proton, draw a random number $\xi=[0,1)$. The proton's source is determined by C[\lfloor\xi\rfloor].
-Weighting for conservation of energy: initial weight $W_i$ of each photon is inversely proportional to the probability of its source being sampled from:
+Make two changes to the code:
+- Sourcing: for each proton, draw a random number $\xi=[0,1)$. The proton's source is determined by C[\lfloor\xi\rfloor].
+- Weighting for conservation of energy: initial weight $W_i$ of each photon is inversely proportional to the probability of its source being sampled from:
 
 $$
 W_i\propto L_\text{tot}/N
