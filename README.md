@@ -1,5 +1,5 @@
 ### Intro
-This repo serves as a proof of concept for integrating importance sampling into the COLT (Cosmic Lyman-$\alpha$ Transfer) solver:
+This repo serves as a proof of concept for integrating importance sampling into the COLT (Cosmic Lyman-alpha Transfer) solver:
 - [Source code](https://bitbucket.org/aaron_smith/colt/src/master/)
 - [Smith et al. (2015)](https://ui.adsabs.harvard.edu/abs/2015MNRAS.449.4336S/abstract)
 - [Documentation](https://colt.readthedocs.io/en/latest/)
