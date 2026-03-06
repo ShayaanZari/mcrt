@@ -88,7 +88,7 @@ $$
 \omega=\dfrac{\kappa_\text{scat}}{\kappa}
 $$
 
-Random walk: For each photon, after initial movement step, if it has not escaped, draw $\xi\in[0,1)$. If $\xi\leq\omega$, it scatters: draw a new $\va n$, take a step in the corresponding direction, and repeat until absorption $\xi>\omega$ or escape $\va r\geq R$. 
-Add a limit on number of scatters.
+Random walk: For each photon, after initial movement step, if it has not escaped, draw $\xi\in[0,1)$. If $\xi\leq\omega$, it scatters: draw a new $\vec n$, take a step in the corresponding direction, and repeat until absorption $\xi>\omega$ or escape $\vec r\geq R$. 
+Add a limit on number of times a photon may scatter before being forcibly terminated.
 
 At $\omega=1.0$, $f_\text{esc}$ should asymptote to $1.0$.
