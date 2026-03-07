@@ -24,8 +24,8 @@ Assumptions:
 
 `Photon` packet with `position` $\vec r_0$ initialized to origin and `direction` $\hat n$ initialized to random isotropic direction (using the $\phi$ and $\mu$ sampling scheme outlined in section 4.2.1 of the MCRT paper)
 
-Compute distance to interaction: 
-$$\triangle l=-\frac{\ln\xi}{\kappa}$$.
+Draw a random number $\xi\in[0,1)$. 
+Compute distance to interaction: $$\triangle l=-\frac{\ln\xi}{\kappa}$$. 
 Move the packet: $\vec r=\vec r_0+\hat n\triangle l$.
 If $|\vec r|\geq R$, where $R$ is radius of the sphere, photon escapes and count is incremented.
 Otherwise, photon is absorbed (do nothing).
@@ -34,7 +34,7 @@ Graph:
 ![alt2](plots/exponential_curve.png?raw=true "Title")
 
 #### v1 - continuous attenuation (complete: `src/sim.cc`)
-Start `Photon.weight` with $1/N$. On each step, multiply by $e^{-\tau}$. As there is only one step currently, the sum of the final weights is trivially:
+Start `Photon.weight` with $W_0=1/N$. Make one step with $s=R$ in a random isotropic direction. Final weight $W_f=W_0\cdot e^{-\tau}$. Terminate. The sum of the final weights is trivially:
 
 $$
 \sum_{i=1}^N(\frac{1}{N}e^{-\tau})=e^{-\tau}
@@ -96,8 +96,11 @@ $$
 \omega=\dfrac{\kappa_\text{scat}}{\kappa}
 $$
 
-Random walk: instead of For each photon, after initial movement step, if it has not escaped, draw $\xi\in[0,1)$. If $\xi\leq\omega$, it scatters: draw a new $\vec n$, take a step in the corresponding direction, and repeat until absorption $\xi>\omega$ or escape $\vec r\geq R$. 
+For each photon:
+1. Move initial position $\triangle l$ using the same method as v0.
+2. If $|\vec r|>R$, the photon escapes. Loop breaks.
+3. If $|\vec r|\leq R$, the photon has not escaped. Draw $\xi\in[0,1)$. If $\xi\leq\omega$, it scatters: draw a new isotropic direction and repeat from step 1. Otherwise, it has been absorbed, and loopbreaks.
+
 Add a limit on number of times a photon may scatter before being forcibly terminated.
 
 At $\omega=1.0$, $f_\text{esc}$ should asymptote to $1.0$.
-
