@@ -37,7 +37,7 @@ $$
 
 Escape fraction should be skewed towards the escape fraction of sources with higher luminosity.
 
-#### v4 - basic source sampling (luminosity PDF)
+#### v4 - source sampling (luminosity PDF)
 Compute total luminosity of all sources $L_\text{tot}$. Initialize CDF array $C$, where the $i$-element of the array is
 
 $$
@@ -60,7 +60,7 @@ $$
 \dfrac{\sum f_\text{esc}^2}{(\sum f_\text{esc})^2}
 $$
 
-#### v6 - importance sampling (biased PDF)
+#### v6 - importance sampling (variance-biased PDF)
 Combine the noise metric from v5 to actively adjust the CDF table in v4 so that sources with higher variance are sampled from more frequently. If $L_1=100$ with $f_\text{esc,1}=0.01$ and $L_2=1$ with $f_\text{esc,2}$, then we spawn equal number of protons at both $S_1$ and $S_2$. 
 
 To conserve energy, the initial weight $W_i$ of a photon is inversely proportional to the probability of the source it was sampled from.
