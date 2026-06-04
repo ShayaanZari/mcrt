@@ -13,3 +13,7 @@ wheels/
 *.py
 archive/
 src/sim
+.python-version
+dynamic-adjustment.md
+pyproject.toml
+src/gelman-rubin.md
