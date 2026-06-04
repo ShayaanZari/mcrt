@@ -8,7 +8,7 @@
 #include <iomanip>
 
 // g++ sim.cc -o sim
-// ./sim 1000 4 0.4 0.05
+// ./sim 1000 4 0.4 0.05 0.5
 
 constexpr double PI = 3.14159265358979323846;
 double mixing_ratio;
@@ -20,11 +20,11 @@ struct Vec3 {
     double dot(const Vec3& v) const { return x*v.x + y*v.y + z*v.z; }
 };
 
-// Accumulates statistical moments for a simulation batch/wave.
+// Accumulates raw weighted moments for a simulation batch/wave.
 // Computes the mean, variance, and effective sample size (N_eff) to monitor MC convergence.
 struct WaveStats {
-    double sum_w = 0.0; // 1st Moment
-    double sum_w2 = 0.0; // 2nd Moment
+    double sum_w = 0.0;  // Sum of weights
+    double sum_w2 = 0.0; // Sum of squared weights
     int n = 0;
 
     void add(double w) {
@@ -164,71 +164,67 @@ struct Environment {
         }
     }
 
-    // Adjusts the importance sampling weights based on recorded statistical moments.
-    // Intended to minimize variance by shifting sample density toward high-contribution cells.
-    void adapt_distribution(double a1, double a2) {
+    // Adjusts the importance sampling weights using the variance-minimizing scalar target:
+    // q_i is proportional to L_i * sqrt(<H_i^2>), where H_i is the unit-weight response.
+    void adapt_distribution() {
         double sum_qt = 0.0;
         std::vector<double> q_target(cells.size());
-        
+
         for (size_t i = 0; i < cells.size(); ++i) {
-            // extract (stable) physical escape fraction (\overline{f_i})
-            double w0 = (cells[i].q_bias > 0) ? cells[i].p_phys / (cells[i].q_bias * config.n_photons) : 0.0;
-            double f_i = (w0 > 0) ? cells[i].stats.mean() / w0 : 0.0;
-            
-            // apply polynomial guess to stable metric
-            double b_i = 1.0 + (a1 * f_i) + (a2 * f_i * f_i); 
-            
-            q_target[i] = cells[i].p_phys * b_i;
+            double w0 = (cells[i].q_bias > 0.0)
+                ? cells[i].p_phys / (cells[i].q_bias * config.n_photons)
+                : 0.0;
+            double h2 = (w0 > 0.0 && cells[i].stats.n > 0)
+                ? (cells[i].stats.sum_w2 / cells[i].stats.n) / (w0 * w0)
+                : 0.0;
+            double response_rms = std::sqrt(std::max(0.0, h2));
+            q_target[i] = cells[i].p_phys * response_rms;
             sum_qt += q_target[i];
         }
 
-        // 3. Apply the Mixing Ratio for absolute stability (c = 0.5)
-        const double c = mixing_ratio; 
+        // Defensively mix with the physical distribution so no shell is permanently starved.
+        const double c = mixing_ratio;
         for (size_t i = 0; i < cells.size(); ++i) {
             double q_ideal = (sum_qt > 0) ? (q_target[i] / sum_qt) : cells[i].p_phys;
             cells[i].q_bias = c * q_ideal + (1.0 - c) * cells[i].p_phys;
         }
     }
 
-void print_local_stats() {
-    std::cout << "\n--- Local Cell Statistics (Wave by Wave) ---\n";
-    std::cout << std::left << std::setw(6) << "Cell" 
-              << std::setw(10) << "p_phys" 
-              << std::setw(10) << "q_bias" 
-              << std::setw(12) << "Exp_Esc_W" // Expected Escaping Weight
-              << std::setw(12) << "Local_NSR" << "\n";
-    
-    for (size_t i = 0; i < cells.size(); ++i) {
-        const auto& c = cells[i];
-        double mu = c.stats.mean();
-        double var = c.stats.variance();
-        int n = c.stats.n;
+    void print_local_stats() {
+        std::cout << "\n--- Local Cell Statistics (Wave by Wave) ---\n";
+        std::cout << std::left << std::setw(6) << "Cell"
+                  << std::setw(10) << "p_phys"
+                  << std::setw(10) << "q_bias"
+                  << std::setw(12) << "Mean_H"
+                  << std::setw(12) << "RMS_H" << "\n";
 
-        // The term 'esc_prob' is now 'Expected Escaping Weight' per unit initial weight.
-        // w_0 = p / (q * N)
-        double w0 = (c.q_bias > 0) ? c.p_phys / (c.q_bias * config.n_photons) : 0.0;
-        double exp_esc_w = (w0 > 0) ? mu / w0 : 0.0;
-        
-        double local_nsr = (mu > 0 && n > 0) ? (std::sqrt(var / n) / mu) : 0.0;
+        for (size_t i = 0; i < cells.size(); ++i) {
+            const auto& c = cells[i];
+            double w0 = (c.q_bias > 0.0) ? c.p_phys / (c.q_bias * config.n_photons) : 0.0;
+            double mean_h = (w0 > 0.0) ? c.stats.mean() / w0 : 0.0;
+            double h2 = (w0 > 0.0 && c.stats.n > 0)
+                ? (c.stats.sum_w2 / c.stats.n) / (w0 * w0)
+                : 0.0;
+            double rms_h = std::sqrt(std::max(0.0, h2));
 
-        std::cout << std::left << std::setw(6) << i 
-                  << std::setw(10) << c.p_phys 
-                  << std::setw(10) << c.q_bias 
-                  << std::setw(12) << exp_esc_w
-                  << std::setw(12);
-        
-        if (n == 0) {
-            std::cout << "NO_SAMPLES";
-        } else if (mu <= 0) {
-            // This indicates total weight evaporation before boundary intersection
-            std::cout << "W_EVAPORATED"; 
-        } else {
-            std::cout << std::to_string(local_nsr * 100).substr(0, 6) + "%";
+            std::cout << std::left << std::setw(6) << i
+                      << std::setw(10) << c.p_phys
+                      << std::setw(10) << c.q_bias
+                      << std::setw(12) << mean_h
+                      << std::setw(12);
+
+            if (c.stats.n == 0) {
+                std::cout << "NO_SAMPLES";
+            } else if (rms_h <= 0.0) {
+                // This indicates total weight evaporation before boundary intersection
+                std::cout << "W_EVAPORATED";
+            } else {
+                std::cout << rms_h;
+            }
+            std::cout << "\n";
         }
-        std::cout << "\n";
+        std::cout << "--------------------------------------------------\n\n";
     }
-    std::cout << "--------------------------------------------------\n\n";
-}
 };
 
 // Handles command-line argument parsing and manages the iterative optimization loop.
@@ -251,10 +247,6 @@ int main(int argc, char* argv[]) {
     double f2_cum = 0.0; 
     int N_cum = 0;       
 
-    // Bias coefficients 
-    // (Set to 0.0, 0.0 for the Unbiased Baseline test)
-    double a1 = 2., a2 = 0.0;
-
     std::cout << std::fixed << std::setprecision(6);
 
     for (int wave = 0; wave < 200; ++wave) {
@@ -265,9 +257,9 @@ int main(int argc, char* argv[]) {
         double f1_wave = env.global_stats.sum_w;
         double f2_wave = env.global_stats.sum_w2;
         
-        // Calculate Wave Efficiency based on COLT's calc_n_eff logic
+        // Calculate wave N_eff based on COLT's calc_n_eff logic
         double Neff_wave = (f2_wave > 0.0) ? (f1_wave * f1_wave / f2_wave) : 0.0;
-        double eff_wave_percent = (Neff_wave / config.n_photons) * 100.0;
+        double neff_wave_percent = (Neff_wave / config.n_photons) * 100.0;
 
         // 2. Cumulative Statistics Update
         f1_cum += f1_wave;
@@ -287,7 +279,7 @@ int main(int argc, char* argv[]) {
         std::cout << "Wave " << std::setw(3) << wave 
                   << " | (Cumulative) Escape Fraction: " << cum_f_esc 
                   << " | (Cumulative) NSR: " << cum_nsr 
-                  << " | (Wave) Number of Effective Photons: " << eff_wave_percent << "%\n";
+                  << " | (Wave) N_eff/N: " << neff_wave_percent << "%\n";
 
         // 4. Stopping Condition
         if (cum_nsr < nsr_tolerance && N_cum > config.n_photons) {
@@ -297,7 +289,7 @@ int main(int argc, char* argv[]) {
 
         // 5. Adapt Distribution for Next Wave
         // (Ensure adapt_distribution() is using wave stats, not cumulative stats)
-        env.adapt_distribution(a1, a2);
+        env.adapt_distribution();
     }
 
     return 0;

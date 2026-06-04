@@ -11,8 +11,11 @@ wheels/
 
 
 *.py
+!scripts/
+!scripts/*.py
 archive/
 src/sim
+sim
 .python-version
 dynamic-adjustment.md
 pyproject.toml
