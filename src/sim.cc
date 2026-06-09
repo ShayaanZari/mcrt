@@ -20,28 +20,28 @@ struct Vec3 {
     double dot(const Vec3& v) const { return x*v.x + y*v.y + z*v.z; }
 };
 
-// Accumulates statistical moments for a simulation batch/wave.
+// Tracks the final/escaped weights of photons in a simulation batch/wave.
 // Computes the mean, variance, and effective sample size (N_eff) to monitor MC convergence.
 struct WaveStats {
-    double sum_w = 0.0; // 1st Moment
-    double sum_w2 = 0.0; // 2nd Moment
+    double weight_sum = 0.0;    // 1st moment: sum of escaped weights
+    double weight_sq_sum = 0.0; // 2nd moment: sum of squared escaped weights
     int n = 0;
 
-    void add(double w) {
-        sum_w += w;
-        sum_w2 += w * w;
+    void add(double weight) {
+        weight_sum += weight;
+        weight_sq_sum += weight * weight;
         n++;
     }
 
-    void reset() { sum_w = 0.0; sum_w2 = 0.0; n = 0; }
-    double mean() const { return n > 0 ? sum_w / n : 0.0; }
+    void reset() { weight_sum = 0.0; weight_sq_sum = 0.0; n = 0; }
+    double mean() const { return n > 0 ? weight_sum / n : 0.0; }
     double variance() const {
         if (n < 2) return 0.0;
         double m = mean();
-        return (sum_w2 - n * m * m) / (n - 1); // Bessel's correction
+        return (weight_sq_sum - n * m * m) / (n - 1); // Bessel's correction
     }
     double n_eff() const {
-        return (sum_w2 == 0) ? 0.0 : (sum_w * sum_w) / sum_w2;
+        return (weight_sq_sum == 0) ? 0.0 : (weight_sum * weight_sum) / weight_sq_sum;
     }
 };
 
@@ -51,6 +51,12 @@ struct Cell {
     double q_bias; // Biased Importance sampling weight
     WaveStats stats; // Localized statistical data
     double r_min, r_max;
+
+    // Returns the initial weight assigned to a photon spawned in this cell.
+    // Encapsulates the importance sampling ratio: p_phys / (q_bias * n_photons).
+    double init_weight(int n_photons) const {
+        return (q_bias > 0.0) ? p_phys / (q_bias * n_photons) : 0.0;
+    }
 };
 
 // Holds invariant simulation parameters.
@@ -156,11 +162,11 @@ struct Environment {
             int idx = std::distance(cdf.begin(), std::upper_bound(cdf.begin(), cdf.end(), xi));
             idx = std::min(idx, (int)cells.size() - 1);
 
-            double w_init = (1.0 / config.n_photons) * (cells[idx].p_phys / cells[idx].q_bias);
-            double w_out = simulate_photon(random_point_in_cell(idx), w_init);
+            double weight_out = simulate_photon(
+                random_point_in_cell(idx), cells[idx].init_weight(config.n_photons));
 
-            cells[idx].stats.add(w_out);
-            global_stats.add(w_out);
+            cells[idx].stats.add(weight_out);
+            global_stats.add(weight_out);
         }
     }
 
@@ -171,18 +177,18 @@ struct Environment {
         std::vector<double> q_target(cells.size());
         
         for (size_t i = 0; i < cells.size(); ++i) {
-            // extract (stable) physical escape fraction (\overline{f_i})
-            double w0 = (cells[i].q_bias > 0) ? cells[i].p_phys / (cells[i].q_bias * config.n_photons) : 0.0;
-            double f_i = (w0 > 0) ? cells[i].stats.mean() / w0 : 0.0;
+            // h_mean: unit-weight escape response, stripped of importance sampling bias.
+            double iw = cells[i].init_weight(config.n_photons);
+            double h_mean = (iw > 0) ? cells[i].stats.mean() / iw : 0.0;
             
             // apply polynomial guess to stable metric
-            double b_i = 1.0 + (a1 * f_i) + (a2 * f_i * f_i); 
+            double b_i = 1.0 + (a1 * h_mean) + (a2 * h_mean * h_mean); 
             
             q_target[i] = cells[i].p_phys * b_i;
             sum_qt += q_target[i];
         }
 
-        // 3. Apply the Mixing Ratio for absolute stability (c = 0.5)
+        // Apply the Mixing Ratio for absolute stability
         const double c = mixing_ratio; 
         for (size_t i = 0; i < cells.size(); ++i) {
             double q_ideal = (sum_qt > 0) ? (q_target[i] / sum_qt) : cells[i].p_phys;
@@ -190,45 +196,44 @@ struct Environment {
         }
     }
 
-void print_local_stats() {
-    std::cout << "\n--- Local Cell Statistics (Wave by Wave) ---\n";
-    std::cout << std::left << std::setw(6) << "Cell" 
-              << std::setw(10) << "p_phys" 
-              << std::setw(10) << "q_bias" 
-              << std::setw(12) << "Exp_Esc_W" // Expected Escaping Weight
-              << std::setw(12) << "Local_NSR" << "\n";
-    
-    for (size_t i = 0; i < cells.size(); ++i) {
-        const auto& c = cells[i];
-        double mu = c.stats.mean();
-        double var = c.stats.variance();
-        int n = c.stats.n;
-
-        // The term 'esc_prob' is now 'Expected Escaping Weight' per unit initial weight.
-        // w_0 = p / (q * N)
-        double w0 = (c.q_bias > 0) ? c.p_phys / (c.q_bias * config.n_photons) : 0.0;
-        double exp_esc_w = (w0 > 0) ? mu / w0 : 0.0;
+    void print_local_stats() {
+        std::cout << "\n--- Local Cell Statistics (Wave by Wave) ---\n";
+        std::cout << std::left << std::setw(6) << "Cell" 
+                  << std::setw(10) << "p_phys" 
+                  << std::setw(10) << "q_bias" 
+                  << std::setw(12) << "h_mean" // Unit-weight escape response
+                  << std::setw(12) << "Local_NSR" << "\n";
         
-        double local_nsr = (mu > 0 && n > 0) ? (std::sqrt(var / n) / mu) : 0.0;
+        for (size_t i = 0; i < cells.size(); ++i) {
+            const auto& c = cells[i];
+            double weight_mean = c.stats.mean();
+            double weight_var = c.stats.variance();
+            int n = c.stats.n;
 
-        std::cout << std::left << std::setw(6) << i 
-                  << std::setw(10) << c.p_phys 
-                  << std::setw(10) << c.q_bias 
-                  << std::setw(12) << exp_esc_w
-                  << std::setw(12);
-        
-        if (n == 0) {
-            std::cout << "NO_SAMPLES";
-        } else if (mu <= 0) {
-            // This indicates total weight evaporation before boundary intersection
-            std::cout << "W_EVAPORATED"; 
-        } else {
-            std::cout << std::to_string(local_nsr * 100).substr(0, 6) + "%";
+            // h_mean: unit-weight escape response, stripped of importance sampling bias.
+            double iw = c.init_weight(config.n_photons);
+            double h_mean = (iw > 0) ? weight_mean / iw : 0.0;
+            
+            double local_nsr = (weight_mean > 0 && n > 0) ? (std::sqrt(weight_var / n) / weight_mean) : 0.0;
+
+            std::cout << std::left << std::setw(6) << i 
+                      << std::setw(10) << c.p_phys 
+                      << std::setw(10) << c.q_bias 
+                      << std::setw(12) << h_mean
+                      << std::setw(12);
+            
+            if (n == 0) {
+                std::cout << "NO_SAMPLES";
+            } else if (weight_mean <= 0) {
+                // This indicates total weight evaporation before boundary intersection
+                std::cout << "W_EVAPORATED"; 
+            } else {
+                std::cout << std::to_string(local_nsr * 100).substr(0, 6) + "%";
+            }
+            std::cout << "\n";
         }
-        std::cout << "\n";
+        std::cout << "--------------------------------------------------\n\n";
     }
-    std::cout << "--------------------------------------------------\n\n";
-}
 };
 
 // Handles command-line argument parsing and manages the iterative optimization loop.
@@ -247,9 +252,9 @@ int main(int argc, char* argv[]) {
     Environment env(config, num_cells, std::random_device{}());
     
     // Cumulative Statistics (Long-Memory for Stopping Criterion)
-    double f1_cum = 0.0; 
-    double f2_cum = 0.0; 
-    int N_cum = 0;       
+    double weight_sum_cum = 0.0; 
+    double weight_sq_sum_cum = 0.0; 
+    int n_photons_cum = 0;       
 
     // Bias coefficients 
     // (Set to 0.0, 0.0 for the Unbiased Baseline test)
@@ -262,35 +267,37 @@ int main(int argc, char* argv[]) {
         // env.print_local_stats(); // Keep uncommented for local diagnostics if needed
 
         // 1. Per-Wave Statistics (Short-Memory for Diagnostics)
-        double f1_wave = env.global_stats.sum_w;
-        double f2_wave = env.global_stats.sum_w2;
+        double weight_sum_wave = env.global_stats.weight_sum;
+        double weight_sq_sum_wave = env.global_stats.weight_sq_sum;
         
         // Calculate Wave Efficiency based on COLT's calc_n_eff logic
-        double Neff_wave = (f2_wave > 0.0) ? (f1_wave * f1_wave / f2_wave) : 0.0;
-        double eff_wave_percent = (Neff_wave / config.n_photons) * 100.0;
+        double n_eff_wave = (weight_sq_sum_wave > 0.0)
+            ? (weight_sum_wave * weight_sum_wave / weight_sq_sum_wave) : 0.0;
+        double n_eff_pct = (n_eff_wave / config.n_photons) * 100.0;
 
         // 2. Cumulative Statistics Update
-        f1_cum += f1_wave;
-        f2_cum += f2_wave;
-        N_cum += config.n_photons;
+        weight_sum_cum += weight_sum_wave;
+        weight_sq_sum_cum += weight_sq_sum_wave;
+        n_photons_cum += config.n_photons;
 
         // 3. Convergence Evaluation (NSR)
-        double cum_nsr = 1.0; // Default to 100% relative error until populated
-        if (f1_cum > 0.0 && N_cum > 0) {
+        double nsr_cum = 1.0; // Default to 100% relative error until populated
+        if (weight_sum_cum > 0.0 && n_photons_cum > 0) {
             // Exact finite-N relative standard error: sqrt(f2/f1^2 - 1/N)
-            double var_term = (f2_cum / (f1_cum * f1_cum)) - (1.0 / N_cum);
-            cum_nsr = (var_term > 0.0) ? std::sqrt(var_term) : 0.0;
+            double var_term = (weight_sq_sum_cum / (weight_sum_cum * weight_sum_cum))
+                            - (1.0 / n_photons_cum);
+            nsr_cum = (var_term > 0.0) ? std::sqrt(var_term) : 0.0;
         }
 
-        double cum_f_esc = f1_cum / (wave + 1);
+        double escape_frac_cum = weight_sum_cum / (wave + 1);
 
         std::cout << "Wave " << std::setw(3) << wave 
-                  << " | (Cumulative) Escape Fraction: " << cum_f_esc 
-                  << " | (Cumulative) NSR: " << cum_nsr 
-                  << " | (Wave) Number of Effective Photons: " << eff_wave_percent << "%\n";
+                  << " | (Cumulative) Escape Fraction: " << escape_frac_cum 
+                  << " | (Cumulative) NSR: " << nsr_cum 
+                  << " | (Wave) N_eff/N: " << n_eff_pct << "%\n";
 
         // 4. Stopping Condition
-        if (cum_nsr < nsr_tolerance && N_cum > config.n_photons) {
+        if (nsr_cum < nsr_tolerance && n_photons_cum > config.n_photons) {
             std::cout << "Target Tolerance Reached in " << wave + 1 << " waves.\n";
             break;
         }
