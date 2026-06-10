@@ -12,8 +12,16 @@ wheels/
 
 *.py
 archive/
-src/sim
+
 .python-version
 dynamic-adjustment.md
 pyproject.toml
+.vscode
+
+# binary
+src/sim
+
+# in-progress documentation
+design.md 
+usage.md
 src/gelman-rubin.md

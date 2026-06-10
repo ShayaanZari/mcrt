@@ -8,9 +8,6 @@ Why implement in this sandbox rather than opening a PR? Primarily for the learni
 1. Verifying mathematical foundations under simple constraints
 2. Validating against architectural and performance requirements for the solver (pre-MPI and HDF5, etc)
 
-Design principles:
-1. Where obvious, match structure names (e.g. `Vec3`) and function signatures (e.g. `isotropic_direction`) of the COLT source code to reduce PR friction, also acting as an on-ramp to the solver.
-2. AI as an accelerator, never the architect. Given a problem $(X)$, I decide that I need to solve it by doing $(Y)$, so I use AI to rapidly understand various methods for accomplishing $(Y)$, and as a fast syntax search for the implementation of $(Y)$.
-3. Minimal but efficient code: OOP principles to decouple simulation, configuration, RNG, computation methods, and I/O.  
+Thought process during designing is explained in `design.md`.
 
 I track my completed iterations as well as future iterations in `plan.md`.
