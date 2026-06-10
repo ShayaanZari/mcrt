@@ -23,5 +23,4 @@ src/sim
 
 # in-progress documentation
 design.md 
-usage.md
 src/gelman-rubin.md
