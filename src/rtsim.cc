@@ -151,7 +151,7 @@ Environment::Environment(Config cfg, int num_cells, unsigned int seed)
     }
 
 // Manages iterative optimization loop and monitors escape fraction and NSR to determine when the simulation target is achieved.
-double compute_escape_fraction(Config config, int num_cells, unsigned int seed, double nsr_tol, int max_waves, bool verbose) {
+double compute_escape_fraction(Config config, int num_cells, unsigned int seed, double nsr_tol, bool verbose) {
     Environment env(config, num_cells, seed);
     
     // Cumulative Statistics
@@ -169,7 +169,7 @@ double compute_escape_fraction(Config config, int num_cells, unsigned int seed, 
         std::cout << std::fixed << std::setprecision(6);                 
     }     
 
-    for (int wave = 0; wave < 200; ++wave) {
+    for (int wave = 0; wave < config.max_waves; ++wave) {
         env.run_wave();
 
         // 1. Per-Wave Statistics

@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_compile_options(-O3 -march=native)                                
 
 add_library(rtsim_lib OBJECT src/rtsim.cc) # Define rtsim object library                                                                                          
+
 add_executable(sim src/main.cc) # Create and compile main as sim target                
 target_link_libraries(sim PRIVATE rtsim_lib) # Link sim to depend on rtsim                            
 

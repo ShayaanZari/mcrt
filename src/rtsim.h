@@ -64,6 +64,7 @@ struct Config {
     double kappa, radius, albedo; // properties of medium: extinction coefficient, spherical radius, and scattering albedo.
     int max_scatters = 10000;
     double mixing_ratio = 0.0; // Defines how much of the target proposal is mixed with physical probability
+    int max_waves = 200; // The number of photon waves to simulate; currently photons per wave is fixed.
 };
 
 // Manages the collection of radial cells, RNG, and global counting.
@@ -105,7 +106,6 @@ double compute_escape_fraction(
     int num_cells,
     unsigned int seed,
     double nsr_tolerance,
-    int max_waves = 200,
     bool verbose = false
 );
 

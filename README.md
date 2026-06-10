@@ -8,6 +8,19 @@ Why implement in this sandbox rather than opening a PR? Primarily for the learni
 1. Verifying mathematical foundations under simple constraints
 2. Validating against architectural and performance requirements for the solver (pre-MPI and HDF5, etc)
 
-Thought process during designing is explained in `design.md`.
+Development milestones and iteration history are tracked in [plan.md](plan.md).
 
-I track my completed iterations as well as future iterations in `plan.md`.
+## Repository Structure
+
+```text
+.
+├── CMakeLists.txt         # Build configuration for CMake & CTest
+├── README.md              # Project overview and file structure
+├── plan.md                # Development roadmap, milestones, and version log
+└── src/                   # C++ source code directory
+    ├── main.cc            # CLI entry point and simulation driver
+    ├── regression_test.cc # Validation test checking results against reference truth
+    ├── rtsim.cc           # Monte Carlo transport & adaptive distribution updates
+    └── rtsim.h            # Grid cells, configuration, and trackers
+```
+
