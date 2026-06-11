@@ -21,6 +21,5 @@ pyproject.toml
 # binary
 src/sim
 
-# in-progress documentation
-design.md 
+# in-progress documentation 
 src/gelman-rubin.md

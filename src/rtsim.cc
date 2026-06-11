@@ -65,8 +65,8 @@ Environment::Environment(Config cfg, int num_cells, unsigned int seed)
     }
 
     void Environment::run_wave() {
-        accumulator.reset();
-        for (auto& c : cells) c.accumulator.reset();
+        wave_stats.reset();
+        for (auto& c : cells) c.stats.reset();
 
         // Build CDF for current biasing
         std::vector<double> cdf(cells.size());
@@ -82,8 +82,8 @@ Environment::Environment(Config cfg, int num_cells, unsigned int seed)
             double weight_out = simulate_photon(
                 random_point_in_cell(idx), cells[idx].init_weight(config.n_photons));
 
-            cells[idx].accumulator.accumulate(weight_out);
-            accumulator.accumulate(weight_out);
+            cells[idx].stats.accumulate(weight_out);
+            wave_stats.accumulate(weight_out);
         }
     }
 
@@ -94,7 +94,7 @@ Environment::Environment(Config cfg, int num_cells, unsigned int seed)
         for (size_t i = 0; i < cells.size(); ++i) {
             // h_mean: unit-weight escape response, stripped of importance sampling bias.
             double iw = cells[i].init_weight(config.n_photons);
-            double h_mean = (iw > 0) ? cells[i].accumulator.mean() / iw : 0.0;
+            double h_mean = (iw > 0) ? cells[i].stats.mean() / iw : 0.0;
             
             // apply polynomial guess to stable metric
             double b_i = 1.0 + (a1 * h_mean) + (a2 * h_mean * h_mean); 
@@ -121,9 +121,9 @@ Environment::Environment(Config cfg, int num_cells, unsigned int seed)
         
         for (size_t i = 0; i < cells.size(); ++i) {
             const auto& c = cells[i];
-            double weight_mean = c.accumulator.mean();
-            double weight_var  = c.accumulator.variance();
-            int n              = c.accumulator.sample_count;
+            double weight_mean = c.stats.mean();
+            double weight_var  = c.stats.variance();
+            int n              = c.stats.sample_count;
 
             // h_mean: unit-weight escape response, stripped of importance sampling bias.
             double iw = c.init_weight(config.n_photons);
@@ -155,7 +155,6 @@ double compute_escape_fraction(Config config, int num_cells, unsigned int seed, 
     Environment env(config, num_cells, seed);
 
     Accumulator cumulative; // default 4 moments. .skewness() and .excess_kurtosis() are available if needed.
-    
     // no need to define and set the variables to 0.0. Cumulative sum of weights, Cumulative sum of squares of weights, Number of cumulative photons
 
     // Bias coefficients (will be more flexible in next commit)
@@ -172,11 +171,11 @@ double compute_escape_fraction(Config config, int num_cells, unsigned int seed, 
         env.run_wave();
 
         // 1. Per-Wave Statistics
-        double weight_sum_wave    = env.accumulator.power_sums[0];
-        double weight_sq_sum_wave = env.accumulator.power_sums[1];
+        double weight_sum_wave    = env.wave_stats.power_sums[0];
+        double weight_sq_sum_wave = env.wave_stats.power_sums[1];
 
         // 2. Cumulative Statistics Update
-        cumulative.merge(env.accumulator);
+        cumulative.merge(env.wave_stats);
 
         // 3. Convergence Evaluation (NSR)
         double nsr_cum = 1.0; // Default to 100% relative error until populated
@@ -188,7 +187,7 @@ double compute_escape_fraction(Config config, int num_cells, unsigned int seed, 
 
         if (verbose) {
             // Calculate Wave Efficiency based on COLT's calc_n_eff logic
-            double n_eff_pct = (env.accumulator.n_eff() / config.n_photons) * 100.0;
+            double n_eff_pct = (env.wave_stats.n_eff() / config.n_photons) * 100.0;
 
             std::cout << "Wave " << std::setw(3) << wave
                       << " | (Cumulative) Escape Fraction: " << escape_frac_cum

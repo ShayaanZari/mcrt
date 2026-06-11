@@ -128,7 +128,7 @@ struct Accumulator {
 struct Cell {
     double p_phys; // Physical Probability
     double q_bias; // Biased Importance sampling weight
-    Accumulator accumulator; // Localized statistical data
+    Accumulator stats; // Per-cell escaped weight statistics for the current wave
     double r_min, r_max;
 
     // Returns the initial weight assigned to a photon spawned in this cell.
@@ -152,7 +152,7 @@ struct Environment {
     Config config;
     std::mt19937 rng;
     std::vector<Cell> cells;
-    Accumulator accumulator;
+    Accumulator wave_stats; // Global escaped weight statistics for the current wave
 
     // Constructs the environment by partitioning the sphere into shells of equal radial thickness.
     // Initializes the physical and biased probabilities based on the volume fraction of each shell.
