@@ -65,8 +65,8 @@ Environment::Environment(Config cfg, int num_cells, unsigned int seed)
     }
 
     void Environment::run_wave() {
-        global_stats.reset();
-        for (auto& c : cells) c.stats.reset();
+        accumulator.reset();
+        for (auto& c : cells) c.accumulator.reset();
 
         // Build CDF for current biasing
         std::vector<double> cdf(cells.size());
@@ -82,8 +82,8 @@ Environment::Environment(Config cfg, int num_cells, unsigned int seed)
             double weight_out = simulate_photon(
                 random_point_in_cell(idx), cells[idx].init_weight(config.n_photons));
 
-            cells[idx].stats.add(weight_out);
-            global_stats.add(weight_out);
+            cells[idx].accumulator.accumulate(weight_out);
+            accumulator.accumulate(weight_out);
         }
     }
 
@@ -94,7 +94,7 @@ Environment::Environment(Config cfg, int num_cells, unsigned int seed)
         for (size_t i = 0; i < cells.size(); ++i) {
             // h_mean: unit-weight escape response, stripped of importance sampling bias.
             double iw = cells[i].init_weight(config.n_photons);
-            double h_mean = (iw > 0) ? cells[i].stats.mean() / iw : 0.0;
+            double h_mean = (iw > 0) ? cells[i].accumulator.mean() / iw : 0.0;
             
             // apply polynomial guess to stable metric
             double b_i = 1.0 + (a1 * h_mean) + (a2 * h_mean * h_mean); 
@@ -121,9 +121,9 @@ Environment::Environment(Config cfg, int num_cells, unsigned int seed)
         
         for (size_t i = 0; i < cells.size(); ++i) {
             const auto& c = cells[i];
-            double weight_mean = c.stats.mean();
-            double weight_var = c.stats.variance();
-            int n = c.stats.n;
+            double weight_mean = c.accumulator.mean();
+            double weight_var  = c.accumulator.variance();
+            int n              = c.accumulator.sample_count;
 
             // h_mean: unit-weight escape response, stripped of importance sampling bias.
             double iw = c.init_weight(config.n_photons);
@@ -173,8 +173,8 @@ double compute_escape_fraction(Config config, int num_cells, unsigned int seed, 
         env.run_wave();
 
         // 1. Per-Wave Statistics
-        double weight_sum_wave = env.global_stats.weight_sum;
-        double weight_sq_sum_wave = env.global_stats.weight_sq_sum;
+        double weight_sum_wave    = env.accumulator.power_sums[0];
+        double weight_sq_sum_wave = env.accumulator.power_sums[1];
 
         // 2. Cumulative Statistics Update
         weight_sum_cum += weight_sum_wave;

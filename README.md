@@ -9,6 +9,7 @@ Why implement in this sandbox rather than opening a PR? Primarily for the learni
 2. Validating against architectural and performance requirements for the solver (pre-MPI and HDF5, etc)
 
 Development milestones and iteration history are tracked in [plan.md](plan.md).
+Thought process during design of major data structures is detailed in `design.md`.
 
 ## Repository Structure
 
