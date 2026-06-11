@@ -153,11 +153,10 @@ Environment::Environment(Config cfg, int num_cells, unsigned int seed)
 // Manages iterative optimization loop and monitors escape fraction and NSR to determine when the simulation target is achieved.
 double compute_escape_fraction(Config config, int num_cells, unsigned int seed, double nsr_tol, bool verbose) {
     Environment env(config, num_cells, seed);
+
+    Accumulator cumulative; // default 4 moments. .skewness() and .excess_kurtosis() are available if needed.
     
-    // Cumulative Statistics
-    double weight_sum_cum = 0.0; // Cumulative sum of weights 
-    double weight_sq_sum_cum = 0.0;  // Cumulative sum of squares of weights
-    int n_photons_cum = 0; // Number of cumulative photons
+    // no need to define and set the variables to 0.0. Cumulative sum of weights, Cumulative sum of squares of weights, Number of cumulative photons
 
     // Bias coefficients (will be more flexible in next commit)
     double a1 = 2., a2 = 0.0; 
@@ -177,27 +176,19 @@ double compute_escape_fraction(Config config, int num_cells, unsigned int seed, 
         double weight_sq_sum_wave = env.accumulator.power_sums[1];
 
         // 2. Cumulative Statistics Update
-        weight_sum_cum += weight_sum_wave;
-        weight_sq_sum_cum += weight_sq_sum_wave;
-        n_photons_cum += config.n_photons;
+        cumulative.merge(env.accumulator);
 
         // 3. Convergence Evaluation (NSR)
         double nsr_cum = 1.0; // Default to 100% relative error until populated
-        if (weight_sum_cum > 0.0 && n_photons_cum > 0) {
-            // Exact finite-N relative standard error: sqrt(f2/f1^2 - 1/N)
-            double var_term = (weight_sq_sum_cum / (weight_sum_cum * weight_sum_cum))
-                            - (1.0 / n_photons_cum);
-            nsr_cum = (var_term > 0.0) ? std::sqrt(var_term) : 0.0;
+        if (cumulative.power_sums[0] > 0.0 && cumulative.sample_count > 0) {
+            nsr_cum = std::sqrt(std::max(0.0, cumulative.variance_penalty()));
         }
 
-        escape_frac_cum = weight_sum_cum / (wave + 1);
+        escape_frac_cum = cumulative.power_sums[0] / (wave + 1);
 
         if (verbose) {
             // Calculate Wave Efficiency based on COLT's calc_n_eff logic
-            double n_eff_wave = (weight_sq_sum_wave > 0.0)
-                                    ? (weight_sum_wave * weight_sum_wave / weight_sq_sum_wave)
-                                    : 0.0;
-            double n_eff_pct = (n_eff_wave / config.n_photons) * 100.0;
+            double n_eff_pct = (env.accumulator.n_eff() / config.n_photons) * 100.0;
 
             std::cout << "Wave " << std::setw(3) << wave
                       << " | (Cumulative) Escape Fraction: " << escape_frac_cum
@@ -206,7 +197,7 @@ double compute_escape_fraction(Config config, int num_cells, unsigned int seed, 
         }
 
         // 4. Stopping Condition
-        if (nsr_cum < nsr_tol && n_photons_cum > config.n_photons) {
+        if (nsr_cum < nsr_tol && cumulative.sample_count > config.n_photons) {
             if (verbose) {
                 std::cout << "Target Tolerance Reached in " << wave + 1 << " waves.\n";
             }

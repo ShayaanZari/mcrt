@@ -71,6 +71,7 @@ struct Accumulator {
 
     // --- More tentative metrics ---
 
+    // Exact finite-N relative standard error: sqrt(f2/f1^2 - 1/N)
     double variance_penalty() const {
         if (sample_count == 0 || power_sums[0] == 0.0) return 0.0;
         return (power_sums[1] / (power_sums[0] * power_sums[0])) - (1.0 / sample_count);
