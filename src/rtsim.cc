@@ -90,64 +90,95 @@ Environment::Environment(Config cfg, int num_cells, unsigned int seed)
     void Environment::adapt_distribution(double a1, double a2) {
         double sum_qt = 0.0;
         std::vector<double> q_target(cells.size());
-        
+
         for (size_t i = 0; i < cells.size(); ++i) {
-            // h_mean: unit-weight escape response, stripped of importance sampling bias.
-            double iw = cells[i].init_weight(config.n_photons);
-            double h_mean = (iw > 0) ? cells[i].stats.mean() / iw : 0.0;
-            
-            // apply polynomial guess to stable metric
-            double b_i = 1.0 + (a1 * h_mean) + (a2 * h_mean * h_mean); 
-            
+            double h_m  = cells[i].h_mean(config.n_photons);
+            double h2_m = cells[i].h2_mean(config.n_photons);
+
+            double b_i = 1.0;
+            switch (config.biasing_mode) {
+                case BiasingMode::NEYMAN_SECOND_MOMENT:
+                    // Exact Neyman allocation: q* ∝ p_phys * sqrt(⟨H²⟩)
+                    b_i = std::sqrt(h2_m + config.floor_epsilon);
+                    break;
+                case BiasingMode::FIRST_MOMENT:
+                    // Mean-proportional allocation: q* ∝ p_phys * ⟨H⟩
+                    b_i = h_m + config.floor_epsilon;
+                    break;
+                case BiasingMode::POLYNOMIAL:
+                    // Legacy polynomial: 1 + a1*⟨H⟩ + a2*⟨H⟩²
+                    b_i = 1.0 + (a1 * h_m) + (a2 * h_m * h_m);
+                    break;
+                case BiasingMode::UNBIASED:
+                    // No biasing; q = p_phys
+                    b_i = 1.0;
+                    break;
+            }
+
             q_target[i] = cells[i].p_phys * b_i;
             sum_qt += q_target[i];
         }
 
         // Apply the Mixing Ratio for absolute stability
-        const double c = config.mixing_ratio; 
+        const double c = config.mixing_ratio;
         for (size_t i = 0; i < cells.size(); ++i) {
-            double q_ideal = (sum_qt > 0) ? (q_target[i] / sum_qt) : cells[i].p_phys;
+            double q_ideal = (sum_qt > 0.0) ? (q_target[i] / sum_qt) : cells[i].p_phys;
             cells[i].q_bias = c * q_ideal + (1.0 - c) * cells[i].p_phys;
         }
     }
 
     void Environment::print_local_stats() {
+        const int N = config.n_photons;
         std::cout << "\n--- Local Cell Statistics (Wave by Wave) ---\n";
-        std::cout << std::left << std::setw(6) << "Cell" 
-                  << std::setw(10) << "p_phys" 
-                  << std::setw(10) << "q_bias" 
-                  << std::setw(12) << "h_mean" // Unit-weight escape response
-                  << std::setw(12) << "Local_NSR" << "\n";
-        
+        std::cout << std::left
+                  << std::setw(6)  << "Cell"
+                  << std::setw(10) << "p_phys"
+                  << std::setw(10) << "q_bias"
+                  << std::setw(12) << "⟨H⟩"        // 1st moment: mean escape response
+                  << std::setw(12) << "⟨H²⟩"       // 2nd raw moment
+                  << std::setw(12) << "H_rms"       // sqrt(⟨H²⟩)
+                  << std::setw(12) << "Skewness"    // standardised 3rd central moment
+                  << std::setw(14) << "ExKurtosis"  // excess kurtosis (0 = Gaussian)
+                  << std::setw(12) << "Local_NSR"
+                  << "\n";
+
         for (size_t i = 0; i < cells.size(); ++i) {
             const auto& c = cells[i];
+            int n = c.stats.sample_count;
+
+            double h1   = c.h_mean(N);
+            double h2   = c.h2_mean(N);
+            double hrms = c.h_rms(N);
+            double skew = c.h_skewness(N);
+            double kurt = c.h_excess_kurtosis(N);
+
             double weight_mean = c.stats.mean();
             double weight_var  = c.stats.variance();
-            int n              = c.stats.sample_count;
+            double local_nsr   = (weight_mean > 0 && n > 0)
+                                 ? (std::sqrt(weight_var / n) / weight_mean) : 0.0;
 
-            // h_mean: unit-weight escape response, stripped of importance sampling bias.
-            double iw = c.init_weight(config.n_photons);
-            double h_mean = (iw > 0) ? weight_mean / iw : 0.0;
-            
-            double local_nsr = (weight_mean > 0 && n > 0) ? (std::sqrt(weight_var / n) / weight_mean) : 0.0;
-
-            std::cout << std::left << std::setw(6) << i 
-                      << std::setw(10) << c.p_phys 
-                      << std::setw(10) << c.q_bias 
-                      << std::setw(12) << h_mean
+            std::cout << std::left
+                      << std::setw(6)  << i
+                      << std::setw(10) << c.p_phys
+                      << std::setw(10) << c.q_bias
+                      << std::setw(12) << h1
+                      << std::setw(12) << h2
+                      << std::setw(12) << hrms
+                      << std::setw(12) << skew
+                      << std::setw(14) << kurt
                       << std::setw(12);
-            
+
             if (n == 0) {
                 std::cout << "NO_SAMPLES";
             } else if (weight_mean <= 0) {
                 // This indicates total weight evaporation before boundary intersection
-                std::cout << "W_EVAPORATED"; 
+                std::cout << "W_EVAPORATED";
             } else {
                 std::cout << std::to_string(local_nsr * 100).substr(0, 6) + "%";
             }
             std::cout << "\n";
         }
-        std::cout << "--------------------------------------------------\n\n";
+        std::cout << std::string(100, '-') << "\n\n";
     }
 
 // Manages iterative optimization loop and monitors escape fraction and NSR to determine when the simulation target is achieved.

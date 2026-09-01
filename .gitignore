@@ -22,4 +22,4 @@ pyproject.toml
 src/sim
 
 # in-progress documentation 
-src/gelman-rubin.md
+local_docs

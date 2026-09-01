@@ -124,6 +124,13 @@ struct Accumulator {
 // of the higher-order computational formulas.
 
 
+enum class BiasingMode {
+    NEYMAN_SECOND_MOMENT, // q* ∝ p_phys * sqrt(⟨H²⟩)
+    FIRST_MOMENT,         // q* ∝ p_phys * ⟨H⟩
+    POLYNOMIAL,           // Legacy polynomial: 1 + a1*⟨H⟩ + a2*⟨H²⟩
+    UNBIASED              // q = p_phys
+};
+
 // Represents a discrete radial shell within the spherical domain.
 struct Cell {
     double p_phys; // Physical Probability
@@ -136,15 +143,86 @@ struct Cell {
     double init_weight(int n_photons) const {
         return (q_bias > 0.0) ? p_phys / (q_bias * n_photons) : 0.0;
     }
+
+    // First moment: conditional mean escape probability ⟨H_i⟩
+    double h_mean(int n_photons) const {
+        double iw = init_weight(n_photons);
+        return (iw > 0.0 && stats.sample_count > 0) ? (stats.power_sums[0] / (stats.sample_count * iw)) : 0.0;
+    }
+
+    // Second raw moment: ⟨H_i²⟩
+    double h2_mean(int n_photons) const {
+        double iw = init_weight(n_photons);
+        return (iw > 0.0 && stats.sample_count > 0) ? (stats.power_sums[1] / (stats.sample_count * iw * iw)) : 0.0;
+    }
+
+    // Root-mean-square escape score: sqrt(⟨H_i²⟩)
+    double h_rms(int n_photons) const {
+        return std::sqrt(std::max(0.0, h2_mean(n_photons)));
+    }
+
+    // Unit-normalized response variance: Var[H_i] = ⟨H_i²⟩ - ⟨H_i⟩²
+    double h_variance(int n_photons) const {
+        double m = h_mean(n_photons);
+        return std::max(0.0, h2_mean(n_photons) - m * m);
+    }
+
+    // Third raw moment: ⟨H_i³⟩
+    double h3_mean(int n_photons) const {
+        double iw = init_weight(n_photons);
+        return (iw > 0.0 && stats.sample_count > 0)
+            ? (stats.power_sums[2] / (stats.sample_count * iw * iw * iw)) : 0.0;
+    }
+
+    // Fourth raw moment: ⟨H_i⁴⟩
+    double h4_mean(int n_photons) const {
+        double iw = init_weight(n_photons);
+        return (iw > 0.0 && stats.sample_count > 0)
+            ? (stats.power_sums[3] / (stats.sample_count * iw * iw * iw * iw)) : 0.0;
+    }
+
+    // Standardized skewness of H_i using H-space central moments.
+    // Positive = right-skewed (rare high-weight survivors dominate the estimator).
+    double h_skewness(int n_photons) const {
+        if (stats.sample_count < 3) return 0.0;
+        double m1 = h_mean(n_photons);
+        double m2 = h2_mean(n_photons);
+        double m3 = h3_mean(n_photons);
+        double mu3 = m3 - 3.0 * m1 * m2 + 2.0 * m1 * m1 * m1;
+        double sigma2 = std::max(0.0, m2 - m1 * m1);
+        if (sigma2 == 0.0) return 0.0;
+        return mu3 / std::pow(sigma2, 1.5);
+    }
+
+    // Excess kurtosis of H_i using H-space central moments (0 for a Gaussian).
+    // Large positive values flag heavy-tail / rare-escape dominance.
+    double h_excess_kurtosis(int n_photons) const {
+        if (stats.sample_count < 4) return 0.0;
+        double m1 = h_mean(n_photons);
+        double m2 = h2_mean(n_photons);
+        double m3 = h3_mean(n_photons);
+        double m4 = h4_mean(n_photons);
+        double mu4 = m4 - 4.0 * m1 * m3 + 6.0 * m1 * m1 * m2 - 3.0 * m1 * m1 * m1 * m1;
+        double sigma2 = std::max(0.0, m2 - m1 * m1);
+        if (sigma2 == 0.0) return 0.0;
+        return mu4 / (sigma2 * sigma2) - 3.0;
+    }
 };
 
 // Holds invariant simulation parameters.
 struct Config {
-    int n_photons;  // Photon count
-    double kappa, radius, albedo; // properties of medium: extinction coefficient, spherical radius, and scattering albedo.
+    int n_photons;  // Photon count per wave
+    double kappa;   // Extinction coefficient (opacity)
+    double radius;  // Spherical radius
+    double albedo;  // Scattering albedo (ratio of scattering to total extinction)
     int max_scatters = 10000;
     double mixing_ratio = 0.0; // Defines how much of the target proposal is mixed with physical probability
-    int max_waves = 200; // The number of photon waves to simulate; currently photons per wave is fixed.
+    int max_waves = 200; // The number of photon waves to simulate; currently photons per wave is fixed
+    
+    // Extended physics and biasing options
+    bool use_path_length_attenuation = false; // Optional: true = exp(-k_abs * dl), false = per-scatter albedo
+    BiasingMode biasing_mode = BiasingMode::NEYMAN_SECOND_MOMENT;
+    double floor_epsilon = 1e-12; // Regularization floor for proposal weights
 };
 
 // Manages the collection of radial cells, RNG, and global counting.
@@ -175,7 +253,7 @@ struct Environment {
 
     // Adjusts the importance sampling weights based on recorded statistical moments.
     // Intended to minimize variance by shifting sample density toward high-contribution cells.
-    void adapt_distribution(double a1, double a2);
+    void adapt_distribution(double a1 = 2.0, double a2 = 0.0);
 
     // Prints summary tables of radial grid values
     void print_local_stats();
